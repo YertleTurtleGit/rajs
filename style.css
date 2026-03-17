@@ -1,0 +1,101 @@
+* {
+  font-family: sans-serif;
+}
+
+.main-tabs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.main-tabs > * {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border: 0.1rem solid;
+  border-radius: 1rem;
+  width: 33.3%;
+}
+
+.input {
+  width: 20%;
+  display: flex;
+  flex-direction: column;
+}
+
+.query {
+  width: 30%;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer {
+  width: 50%;
+  display: flex;
+  justify-content: center;
+}
+
+#output-list,
+#input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: scroll;
+  list-style: none;
+  padding: 0;
+}
+
+#input-list {
+  overflow-x: hidden;
+}
+
+#output-list li,
+#input-list li {
+  border: 0.1rem solid;
+  border-radius: 1rem;
+  padding: 0.5rem;
+}
+
+#input-list li progress {
+  width: 100%;
+}
+
+#progress-bar {
+  width: 100%;
+}
+
+#canvas-viewer {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+#canvas-viewer canvas {
+  display: block;
+  width: 100%;
+}
+
+li[data-active] {
+  background-color: lightgrey;
+}
+
+.light-text {
+  color: grey;
+  font-size: 85%;
+}
+
+#input-list li div,
+.output-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.output-info {
+  padding-bottom: 0.25rem;
+}
