@@ -72,7 +72,11 @@
 #canvas-viewer {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  width: 100%;
+}
+
+#canvas-viewer iframe {
+  border-radius: 1rem;
 }
 
 #canvas-viewer canvas {

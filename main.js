@@ -1,5 +1,5 @@
-import * as pdfjsLib from "./lib/pdfjs/pdf.min.js";
-pdfjsLib.GlobalWorkerOptions.workerSrc = "./lib/pdfjs/pdf.worker.min.js";
+import * as pdfjsLib from "./lib/pdfjs/build/pdf.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "./lib/pdfjs/build/pdf.worker.mjs";
 
 const EPSILON = 0.0001;
 
@@ -13,17 +13,113 @@ const CANVAS_VIEWER = document.getElementById("canvas-viewer");
 
 const CHUNK_SIZE = 800;
 
-// Store loaded PDF documents by documentId for later rendering
-const pdfDocuments = new Map();
+// Store raw ArrayBuffers by documentId so we can push them into the viewer
+const pdfBuffers = new Map();
+
+// Track the current blob URL so we can revoke it when switching documents
+let currentBlobUrl = null;
+
+// Create a persistent iframe inside CANVAS_VIEWER for the PDF.js full viewer
+const viewerFrame = document.createElement("iframe");
+viewerFrame.style.cssText = "width:100%;height:100%;border:none;display:block;";
+CANVAS_VIEWER.style.padding = "0";
+CANVAS_VIEWER.append(viewerFrame);
+
+const VIEWER_URL = "./lib/pdfjs/web/viewer.html";
+
+let currentDocumentId = null;
+
+/**
+ * Wait for PDFViewerApplication inside the iframe to be fully initialised.
+ */
+function waitForViewer(win) {
+  return new Promise((resolve) => {
+    const tryResolve = () => {
+      const app = win.PDFViewerApplication;
+      if (!app) return false;
+      if (app.initialized) {
+        resolve(app);
+        return true;
+      }
+      if (app.initializedPromise) {
+        app.initializedPromise.then(() => resolve(app));
+        return true;
+      }
+      return false;
+    };
+
+    if (!tryResolve()) {
+      viewerFrame.addEventListener(
+        "load",
+        () => {
+          const app = win.PDFViewerApplication;
+          if (app?.initializedPromise) {
+            app.initializedPromise.then(() => resolve(app));
+          } else {
+            resolve(app);
+          }
+        },
+        { once: true },
+      );
+    }
+  });
+}
+
+/**
+ * Load a document into the iframe viewer and jump to the target page.
+ */
+async function renderPage(documentId, pageNumber) {
+  const buffer = pdfBuffers.get(documentId);
+  if (!buffer) return;
+
+  if (currentDocumentId !== documentId) {
+    currentDocumentId = documentId;
+
+    // Revoke previous blob URL to free memory
+    if (currentBlobUrl) {
+      URL.revokeObjectURL(currentBlobUrl);
+      currentBlobUrl = null;
+    }
+
+    // Create a blob URL — most reliable way to feed binary data to the viewer
+    const blob = new Blob([buffer], { type: "application/pdf" });
+    currentBlobUrl = URL.createObjectURL(blob);
+
+    // Append ?file= (empty) to suppress the default Mozilla sample PDF,
+    // then load our blob URL once the viewer is ready
+    await new Promise((resolve) => {
+      viewerFrame.onload = resolve;
+      viewerFrame.src = VIEWER_URL + "?file=";
+    });
+
+    const app = await waitForViewer(viewerFrame.contentWindow);
+
+    await app.open({ url: currentBlobUrl });
+
+    app.eventBus.on(
+      "pagesloaded",
+      () => {
+        app.pdfViewer.scrollPageIntoView({ pageNumber });
+      },
+      { once: true },
+    );
+  } else {
+    // Same document already loaded — just scroll
+    const app = viewerFrame.contentWindow?.PDFViewerApplication;
+    app?.pdfViewer?.scrollPageIntoView({ pageNumber });
+  }
+}
 
 const readPDFs = async (files) =>
   Promise.all(
     files.map(async (file, fileIndex) => {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-      // Store the pdf document reference for later page rendering
-      pdfDocuments.set(fileIndex, pdf);
+      // Store a copy BEFORE passing to pdfjsLib — PDF.js transfers (detaches)
+      // the underlying ArrayBuffer during parsing, leaving the original empty.
+      pdfBuffers.set(fileIndex, arrayBuffer.slice(0));
+      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) })
+        .promise;
 
       const documentTitle = pdf.title || file.name;
       const pages = await Promise.all(
@@ -44,54 +140,16 @@ const readPDFs = async (files) =>
     }),
   );
 
-let currentDocumentId = null;
-
-async function renderDocument(documentId) {
-  const pdf = pdfDocuments.get(documentId);
-  if (!pdf) return;
-
-  CANVAS_VIEWER.innerHTML = "";
-  currentDocumentId = documentId;
-
-  const width = CANVAS_VIEWER.clientWidth || 800;
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-
-    const canvas = document.createElement("canvas");
-    canvas.id = `pdf-page-${documentId}-${pageNumber}`;
-    CANVAS_VIEWER.append(canvas);
-
-    const viewport = page.getViewport({ scale: 1 });
-    const scale = width / viewport.width;
-    const scaledViewport = page.getViewport({ scale });
-
-    canvas.width = scaledViewport.width;
-    canvas.height = scaledViewport.height;
-
-    await page.render({
-      canvasContext: canvas.getContext("2d"),
-      viewport: scaledViewport,
-    }).promise;
-  }
-}
-
-async function renderPage(documentId, pageNumber) {
-  // Re-render only if switching to a different document
-  if (currentDocumentId !== documentId) {
-    await renderDocument(documentId);
-  }
-
-  const target = document.getElementById(
-    `pdf-page-${documentId}-${pageNumber}`,
-  );
-  target?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
 PDF_INPUT.addEventListener("input", async () => {
   PDF_INPUT.remove();
   PROGRESS_BAR.value = 0;
-  pdfDocuments.clear();
+  pdfBuffers.clear();
+  currentDocumentId = null;
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl);
+    currentBlobUrl = null;
+  }
+  viewerFrame.src = "about:blank";
   INPUT_LIST.innerHTML = "";
   OUTPUT_LIST.innerHTML = "";
 
@@ -307,8 +365,3 @@ PDF_INPUT.addEventListener("input", async () => {
     QUERY_BUTTON.disabled = false;
   });
 });
-
-function handleResize() {
-  //here
-}
-window.addEventListener("resize", handleResize);
