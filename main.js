@@ -13,13 +13,10 @@ const CANVAS_VIEWER = document.getElementById("canvas-viewer");
 
 const CHUNK_SIZE = 800;
 
-// Store raw ArrayBuffers by documentId so we can push them into the viewer
 const pdfBuffers = new Map();
 
-// Track the current blob URL so we can revoke it when switching documents
 let currentBlobUrl = null;
 
-// Create a persistent iframe inside CANVAS_VIEWER for the PDF.js full viewer
 const viewerFrame = document.createElement("iframe");
 viewerFrame.style.cssText = "width:100%;height:100%;border:none;display:block;";
 CANVAS_VIEWER.style.padding = "0";
@@ -29,9 +26,6 @@ const VIEWER_URL = "./lib/pdfjs/web/viewer.html";
 
 let currentDocumentId = null;
 
-/**
- * Wait for PDFViewerApplication inside the iframe to be fully initialised.
- */
 function waitForViewer(win) {
   return new Promise((resolve) => {
     const tryResolve = () => {
@@ -65,28 +59,44 @@ function waitForViewer(win) {
   });
 }
 
-/**
- * Load a document into the iframe viewer and jump to the target page.
- */
-async function renderPage(documentId, pageNumber) {
+async function renderPage(documentId, pageNumber, chunkText) {
   const buffer = pdfBuffers.get(documentId);
   if (!buffer) return;
+
+  const highlightChunk = (app) => {
+    if (!chunkText) return;
+
+    const normalized = chunkText
+      .replace(/-\s+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const match = normalized.match(/[A-Za-z][^.]{20,}/);
+    const query = match
+      ? match[0].slice(0, 80).replace(/\s+\S*$/, "")
+      : normalized.slice(0, 80).replace(/\s+\S*$/, "");
+
+    app.eventBus.dispatch("find", {
+      query,
+      type: "",
+      caseSensitive: false,
+      entireWord: false,
+      highlightAll: false,
+      findPrevious: false,
+    });
+  };
 
   if (currentDocumentId !== documentId) {
     currentDocumentId = documentId;
 
-    // Revoke previous blob URL to free memory
     if (currentBlobUrl) {
       URL.revokeObjectURL(currentBlobUrl);
       currentBlobUrl = null;
     }
 
-    // Create a blob URL — most reliable way to feed binary data to the viewer
     const blob = new Blob([buffer], { type: "application/pdf" });
     currentBlobUrl = URL.createObjectURL(blob);
 
-    // Append ?file= (empty) to suppress the default Mozilla sample PDF,
-    // then load our blob URL once the viewer is ready
     await new Promise((resolve) => {
       viewerFrame.onload = resolve;
       viewerFrame.src = VIEWER_URL + "?file=";
@@ -100,13 +110,15 @@ async function renderPage(documentId, pageNumber) {
       "pagesloaded",
       () => {
         app.pdfViewer.scrollPageIntoView({ pageNumber });
+        highlightChunk(app);
       },
       { once: true },
     );
   } else {
-    // Same document already loaded — just scroll
     const app = viewerFrame.contentWindow?.PDFViewerApplication;
-    app?.pdfViewer?.scrollPageIntoView({ pageNumber });
+    if (!app) return;
+    app.pdfViewer.scrollPageIntoView({ pageNumber });
+    highlightChunk(app);
   }
 }
 
@@ -115,11 +127,10 @@ const readPDFs = async (files) =>
     files.map(async (file, fileIndex) => {
       const arrayBuffer = await file.arrayBuffer();
 
-      // Store a copy BEFORE passing to pdfjsLib — PDF.js transfers (detaches)
-      // the underlying ArrayBuffer during parsing, leaving the original empty.
       pdfBuffers.set(fileIndex, arrayBuffer.slice(0));
-      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) })
-        .promise;
+      const pdf = await pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+      }).promise;
 
       const documentTitle = pdf.title || file.name;
       const pages = await Promise.all(
@@ -303,7 +314,7 @@ PDF_INPUT.addEventListener("input", async () => {
       (Math.sqrt(a.reduce((sum, val) => sum + val * val, 0)) *
         Math.sqrt(b.reduce((sum, val) => sum + val * val, 0)));
 
-    const n = 10;
+    const n = 15;
 
     const nClosest = embeddings
       .map((embedding, index) => ({
@@ -356,7 +367,7 @@ PDF_INPUT.addEventListener("input", async () => {
           li.removeAttribute("data-active"),
         );
         listItem.setAttribute("data-active", "true");
-        renderPage(chunk.documentId, chunk.pageNumber);
+        renderPage(chunk.documentId, chunk.pageNumber, chunk.content);
       });
 
       OUTPUT_LIST.append(listItem);
