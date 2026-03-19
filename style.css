@@ -1,5 +1,7 @@
 * {
   font-family: sans-serif;
+  margin: 0;
+  padding: 0;
 }
 
 .main-tabs {
@@ -28,10 +30,35 @@
   flex-direction: column;
 }
 
+.input input {
+  border: 0.1rem solid;
+  border-radius: 1rem;
+  padding: 0.5rem;
+}
+
 .query {
   width: 30%;
   display: flex;
   flex-direction: column;
+}
+
+.query form {
+  padding: 0.5rem;
+  padding-left: 0rem;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.query input {
+  border: 0.1rem solid;
+  border-radius: 1rem 0 0 1rem;
+  padding: 0.5rem;
+}
+
+#query-submit {
+  border-radius: 0 1rem 1rem 0;
 }
 
 .viewer {
@@ -61,12 +88,14 @@
   padding: 0.5rem;
 }
 
-#input-list li progress {
+progress {
   width: 100%;
+  height: 1rem;
+  min-height: 1rem;
 }
 
 #progress-bar {
-  width: 100%;
+  margin-bottom: 1rem;
 }
 
 #canvas-viewer {

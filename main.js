@@ -314,7 +314,7 @@ PDF_INPUT.addEventListener("input", async () => {
       (Math.sqrt(a.reduce((sum, val) => sum + val * val, 0)) *
         Math.sqrt(b.reduce((sum, val) => sum + val * val, 0)));
 
-    const n = 15;
+    const n = 25;
 
     const nClosest = embeddings
       .map((embedding, index) => ({
