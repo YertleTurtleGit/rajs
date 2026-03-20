@@ -30,6 +30,10 @@
   flex-direction: column;
 }
 
+.input p {
+  margin: 0.5rem;
+}
+
 .input input {
   border: 0.1rem solid;
   border-radius: 1rem;

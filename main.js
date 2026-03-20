@@ -152,7 +152,12 @@ const readPDFs = async (files) =>
   );
 
 PDF_INPUT.addEventListener("input", async () => {
-  PDF_INPUT.remove();
+  Array.from(document.getElementsByClassName("hide-on-start")).forEach(
+    (element) => {
+      element.style.display = "none";
+    },
+  );
+
   PROGRESS_BAR.removeAttribute("value");
   pdfBuffers.clear();
   currentDocumentId = null;
