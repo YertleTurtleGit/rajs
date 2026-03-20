@@ -230,7 +230,7 @@ PDF_INPUT.addEventListener("input", async () => {
 
   PROGRESS_BAR.removeAttribute("value");
 
-  const MAX_WORKERS = navigator.hardwareConcurrency;
+  const MAX_WORKERS = Math.max(navigator.hardwareConcurrency, 4);
   const taskQueue = [];
 
   function createWorker() {
