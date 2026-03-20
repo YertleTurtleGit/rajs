@@ -10,6 +10,7 @@ const QUERY_BUTTON = document.getElementById("query-submit");
 const INPUT_LIST = document.getElementById("input-list");
 const OUTPUT_LIST = document.getElementById("output-list");
 const CANVAS_VIEWER = document.getElementById("canvas-viewer");
+const TEXT_VIEWER = document.getElementById("plain-text-viewer");
 
 const CHUNK_SIZE = 800;
 
@@ -18,13 +19,13 @@ const pdfBuffers = new Map();
 let currentBlobUrl = null;
 
 const viewerFrame = document.createElement("iframe");
-viewerFrame.style.cssText = "width:100%;height:100%;border:none;display:block;";
 CANVAS_VIEWER.style.padding = "0";
 CANVAS_VIEWER.append(viewerFrame);
 
 const VIEWER_URL = "./lib/pdfjs/web/viewer.html";
 
 let currentDocumentId = null;
+const documentMeta = new Map();
 
 function waitForViewer(win) {
   return new Promise((resolve) => {
@@ -60,8 +61,49 @@ function waitForViewer(win) {
 }
 
 async function renderPage(documentId, pageNumber, chunkText) {
+  const meta = documentMeta.get(documentId);
+  if (!meta) return;
+
+  if (meta.type === "txt") {
+    viewerFrame.style.display = "none";
+    TEXT_VIEWER.style.display = "block";
+
+    if (currentDocumentId !== documentId) {
+      currentDocumentId = documentId;
+      TEXT_VIEWER.textContent = meta.content ?? "";
+    }
+
+    if (chunkText) {
+      const needle = chunkText.trim().slice(0, 120);
+      const full = meta.content ?? "";
+      const idx = full.indexOf(needle);
+      if (idx !== -1) {
+        // Build highlighted HTML
+        const before = full.slice(0, idx);
+        const match = full.slice(idx, idx + chunkText.length);
+        const after = full.slice(idx + chunkText.length);
+        const esc = (s) =>
+          s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        TEXT_VIEWER.innerHTML =
+          esc(before) + `<mark>` + esc(match) + `</mark>` + esc(after);
+        TEXT_VIEWER.querySelector("mark")?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      } else {
+        TEXT_VIEWER.textContent = full;
+      }
+    }
+    return;
+  }
+
+  // PDF path — same as before
   const buffer = pdfBuffers.get(documentId);
   if (!buffer) return;
+
+  // Switch to PDF viewer
+  TEXT_VIEWER.style.display = "none";
+  viewerFrame.style.display = "block";
 
   const highlightChunk = (app) => {
     if (!chunkText) return;
@@ -122,34 +164,79 @@ async function renderPage(documentId, pageNumber, chunkText) {
   }
 }
 
-const readPDFs = async (files) =>
+// ---------------------------------------------------------------------------
+// Readers
+// ---------------------------------------------------------------------------
+
+async function readTxtFile(file, fileIndex) {
+  const text = await file.text();
+  documentMeta.set(fileIndex, { type: "txt", name: file.name, content: text });
+
+  // Split into pseudo-pages by newlines (~3000 chars each) so page numbers
+  // still make sense in the results list.
+  const PAGE_SIZE = 3000;
+  const pages = [];
+  for (let i = 0; i < text.length; i += PAGE_SIZE) {
+    pages.push({
+      documentId: fileIndex,
+      pageNumber: pages.length + 1,
+      documentTitle: file.name,
+      content: text.slice(i, i + PAGE_SIZE),
+    });
+  }
+  if (pages.length === 0) {
+    pages.push({
+      documentId: fileIndex,
+      pageNumber: 1,
+      documentTitle: file.name,
+      content: "",
+    });
+  }
+  return pages;
+}
+
+async function readPdfFile(file, fileIndex) {
+  const arrayBuffer = await file.arrayBuffer();
+  pdfBuffers.set(fileIndex, arrayBuffer.slice(0));
+  const pdf = await pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+  }).promise;
+
+  const documentTitle = pdf.title || file.name;
+  documentMeta.set(fileIndex, { type: "pdf", name: file.name });
+
+  return Promise.all(
+    Array.from({ length: pdf.numPages }, async (_, pageIndex) => ({
+      documentId: fileIndex,
+      pageNumber: pageIndex + 1,
+      documentTitle,
+      content: await pdf
+        .getPage(pageIndex + 1)
+        .then((p) => p.getTextContent())
+        .then((c) => c.items.map((i) => i.str).join(" ")),
+    })),
+  );
+}
+
+const readFiles = async (files) =>
   Promise.all(
     files.map(async (file, fileIndex) => {
-      const arrayBuffer = await file.arrayBuffer();
-
-      pdfBuffers.set(fileIndex, arrayBuffer.slice(0));
-      const pdf = await pdfjsLib.getDocument({
-        data: new Uint8Array(arrayBuffer),
-      }).promise;
-
-      const documentTitle = pdf.title || file.name;
-      const pages = await Promise.all(
-        Array.from({ length: pdf.numPages }, async (_, pageIndex) => {
-          return {
-            documentId: fileIndex,
-            pageNumber: pageIndex + 1,
-            documentTitle: documentTitle,
-            content: await pdf
-              .getPage(pageIndex + 1)
-              .then((p) => p.getTextContent())
-              .then((c) => c.items.map((i) => i.str).join(" ")),
-          };
-        }),
-      );
+      const isTxt =
+        file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+      const pages = isTxt
+        ? await readTxtFile(file, fileIndex)
+        : await readPdfFile(file, fileIndex);
       PROGRESS_BAR.value += 1 / files.length;
       return pages;
     }),
   );
+
+// ---------------------------------------------------------------------------
+// Main input handler
+// ---------------------------------------------------------------------------
+
+// Accept both PDF and plain-text files
+PDF_INPUT.setAttribute("accept", ".pdf,.txt,application/pdf,text/plain");
 
 PDF_INPUT.addEventListener("input", async () => {
   Array.from(document.getElementsByClassName("hide-on-start")).forEach(
@@ -160,17 +247,21 @@ PDF_INPUT.addEventListener("input", async () => {
 
   PROGRESS_BAR.removeAttribute("value");
   pdfBuffers.clear();
+  documentMeta.clear();
   currentDocumentId = null;
   if (currentBlobUrl) {
     URL.revokeObjectURL(currentBlobUrl);
     currentBlobUrl = null;
   }
   viewerFrame.src = "about:blank";
+  viewerFrame.style.display = "block";
+  TEXT_VIEWER.style.display = "none";
+  TEXT_VIEWER.textContent = "";
   INPUT_LIST.innerHTML = "";
   OUTPUT_LIST.innerHTML = "";
 
   const files = Array.from(PDF_INPUT.files);
-  const pages = await readPDFs(files);
+  const pages = await readFiles(files);
 
   const chunks = pages.flatMap((pages) => {
     const chunks = [];
@@ -359,7 +450,10 @@ PDF_INPUT.addEventListener("input", async () => {
 
       const pageSpan = document.createElement("span");
       pageSpan.classList.add("light-text");
-      pageSpan.textContent = "p." + chunk.pageNumber;
+      // For txt files show "§N" instead of "p.N" to indicate it's a text section
+      const meta = documentMeta.get(chunk.documentId);
+      pageSpan.textContent =
+        meta?.type === "txt" ? "§" + chunk.pageNumber : "p." + chunk.pageNumber;
 
       const contentDiv = document.createElement("div");
       contentDiv.textContent = chunk.content;

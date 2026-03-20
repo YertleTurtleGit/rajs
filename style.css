@@ -4,6 +4,15 @@
   padding: 0;
 }
 
+iframe {
+  border: 0;
+}
+
+mark {
+  background: #ffe066;
+  border-radius: 2px;
+}
+
 .main-tabs {
   position: absolute;
   top: 0;
@@ -121,11 +130,12 @@ progress {
 
 #canvas-viewer iframe {
   border-radius: 1rem;
+  height: 100%;
 }
 
-#canvas-viewer canvas {
-  display: block;
-  width: 100%;
+#plain-text-viewer {
+  overflow-y: scroll;
+  margin: 1rem;
 }
 
 li[data-active] {
