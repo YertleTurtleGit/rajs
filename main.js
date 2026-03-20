@@ -153,7 +153,7 @@ const readPDFs = async (files) =>
 
 PDF_INPUT.addEventListener("input", async () => {
   PDF_INPUT.remove();
-  PROGRESS_BAR.value = 0;
+  PROGRESS_BAR.removeAttribute("value");
   pdfBuffers.clear();
   currentDocumentId = null;
   if (currentBlobUrl) {
@@ -228,7 +228,7 @@ PDF_INPUT.addEventListener("input", async () => {
     INPUT_LIST.append(listItem);
   });
 
-  PROGRESS_BAR.value = 0;
+  PROGRESS_BAR.removeAttribute("value");
 
   const MAX_WORKERS = navigator.hardwareConcurrency;
   const taskQueue = [];
