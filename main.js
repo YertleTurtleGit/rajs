@@ -205,7 +205,7 @@ PDF_INPUT.addEventListener("input", async () => {
     return chunks;
   });
 
-  const documentChunkLenghts = Object.fromEntries(
+  const documentChunkLengths = Object.fromEntries(
     Object.entries(Object.groupBy(chunks, (item) => item.documentId)).map(
       ([id, items]) => [id, items.length],
     ),
@@ -218,7 +218,7 @@ PDF_INPUT.addEventListener("input", async () => {
     titleSpan.textContent = file.name;
     const chunkCountSpan = document.createElement("span");
     chunkCountSpan.classList.add("light-text");
-    chunkCountSpan.textContent = documentChunkLenghts[documentId] + " chunks";
+    chunkCountSpan.textContent = documentChunkLengths[documentId] + " chunks";
     const progressBar = document.createElement("progress");
     progressBar.id = "input-progress-" + documentId;
     progressBar.value = 0;
@@ -244,7 +244,7 @@ PDF_INPUT.addEventListener("input", async () => {
       const documentProgressBar = document.getElementById(
         "input-progress-" + data.documentId,
       );
-      documentProgressBar.value += 1 / documentChunkLenghts[data.documentId];
+      documentProgressBar.value += 1 / documentChunkLengths[data.documentId];
       if (documentProgressBar.value >= 1 - EPSILON)
         documentProgressBar.remove();
       entry.busy = false;
