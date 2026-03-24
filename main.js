@@ -60,12 +60,59 @@ function waitForViewer(win) {
   });
 }
 
+function parseSrt(rawText) {
+  const entries = [];
+
+  const blocks = rawText
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n\s*\n/);
+
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    if (lines.length < 2) continue;
+
+    const indexLine = lines[0].trim();
+    const timeLine = lines[1].trim();
+
+    const timeMatch = timeLine.match(
+      /(\d{2}:\d{2}:\d{2}[,.:]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.:]\d{3})/,
+    );
+    if (!timeMatch) continue;
+
+    const startTime = timeMatch[1].replace(",", ".");
+    const endTime = timeMatch[2].replace(",", ".");
+    const text = lines
+      .slice(2)
+      .join(" ")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+
+    if (!text) continue;
+
+    entries.push({
+      index: parseInt(indexLine, 10) || entries.length + 1,
+      startTime,
+      endTime,
+      text,
+    });
+  }
+
+  return entries;
+}
+
+function formatTimestamp(ts) {
+  const [hms] = ts.split(".");
+  const [h, m, s] = hms.split(":");
+  return h === "00" ? `${m}:${s}` : `${parseInt(h, 10)}:${m}:${s}`;
+}
+
 async function renderPage(documentId, pageNumber, chunkText) {
   const meta = documentMeta.get(documentId);
   if (!meta) return;
 
   if (meta.type === "txt") {
-    viewerFrame.style.display = "none";
+    CANVAS_VIEWER.style.display = "none";
     TEXT_VIEWER.style.display = "block";
 
     if (currentDocumentId !== documentId) {
@@ -78,7 +125,6 @@ async function renderPage(documentId, pageNumber, chunkText) {
       const full = meta.content ?? "";
       const idx = full.indexOf(needle);
       if (idx !== -1) {
-        // Build highlighted HTML
         const before = full.slice(0, idx);
         const match = full.slice(idx, idx + chunkText.length);
         const after = full.slice(idx + chunkText.length);
@@ -88,7 +134,6 @@ async function renderPage(documentId, pageNumber, chunkText) {
           esc(before) + `<mark>` + esc(match) + `</mark>` + esc(after);
         TEXT_VIEWER.querySelector("mark")?.scrollIntoView({
           behavior: "smooth",
-          block: "center",
         });
       } else {
         TEXT_VIEWER.textContent = full;
@@ -97,13 +142,41 @@ async function renderPage(documentId, pageNumber, chunkText) {
     return;
   }
 
-  // PDF path — same as before
+  if (meta.type === "srt") {
+    CANVAS_VIEWER.style.display = "none";
+    TEXT_VIEWER.style.display = "block";
+    currentDocumentId = documentId;
+
+    const entries = meta.entries;
+    const esc = (s) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    TEXT_VIEWER.innerHTML = entries
+      .map((entry) => {
+        const escapedText = esc(entry.text);
+        const ts = `<span class="srt-timestamp">${formatTimestamp(entry.startTime)}</span>`;
+        const span = `<p data-srt-index="${entry.index}">${ts} ${escapedText}</p>`;
+
+        return pageNumber === entry.index ? `<mark>${span}</mark>` : span;
+      })
+      .join("");
+
+    const target =
+      TEXT_VIEWER.querySelector("mark") ??
+      TEXT_VIEWER.querySelector(`[data-srt-index="${pageNumber}"]`);
+    target?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+      inline: "nearest",
+    });
+    return;
+  }
+
   const buffer = pdfBuffers.get(documentId);
   if (!buffer) return;
 
-  // Switch to PDF viewer
   TEXT_VIEWER.style.display = "none";
-  viewerFrame.style.display = "block";
+  CANVAS_VIEWER.style.display = "block";
 
   const highlightChunk = (app) => {
     if (!chunkText) return;
@@ -164,16 +237,10 @@ async function renderPage(documentId, pageNumber, chunkText) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Readers
-// ---------------------------------------------------------------------------
-
 async function readTxtFile(file, fileIndex) {
   const text = await file.text();
   documentMeta.set(fileIndex, { type: "txt", name: file.name, content: text });
 
-  // Split into pseudo-pages by newlines (~3000 chars each) so page numbers
-  // still make sense in the results list.
   const PAGE_SIZE = 3000;
   const pages = [];
   for (let i = 0; i < text.length; i += PAGE_SIZE) {
@@ -192,6 +259,37 @@ async function readTxtFile(file, fileIndex) {
       content: "",
     });
   }
+  return pages;
+}
+
+async function readSrtFile(file, fileIndex) {
+  const text = await file.text();
+  const entries = parseSrt(text);
+
+  documentMeta.set(fileIndex, {
+    type: "srt",
+    name: file.name,
+    entries,
+  });
+
+  const pages = entries.map((entry) => ({
+    documentId: fileIndex,
+    pageNumber: entry.index,
+    documentTitle: file.name,
+    content: entry.text,
+    startTime: entry.startTime,
+  }));
+
+  if (pages.length === 0) {
+    pages.push({
+      documentId: fileIndex,
+      pageNumber: 1,
+      documentTitle: file.name,
+      content: "",
+      startTime: null,
+    });
+  }
+
   return pages;
 }
 
@@ -221,22 +319,31 @@ async function readPdfFile(file, fileIndex) {
 const readFiles = async (files) =>
   Promise.all(
     files.map(async (file, fileIndex) => {
-      const isTxt =
-        file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
-      const pages = isTxt
-        ? await readTxtFile(file, fileIndex)
-        : await readPdfFile(file, fileIndex);
+      const nameLower = file.name.toLowerCase();
+      const isTxt = file.type === "text/plain" || nameLower.endsWith(".txt");
+      const isSrt =
+        file.type === "application/x-subrip" ||
+        file.type === "text/x-srt" ||
+        nameLower.endsWith(".srt");
+
+      let pages;
+      if (isSrt) {
+        pages = await readSrtFile(file, fileIndex);
+      } else if (isTxt) {
+        pages = await readTxtFile(file, fileIndex);
+      } else {
+        pages = await readPdfFile(file, fileIndex);
+      }
+
       PROGRESS_BAR.value += 1 / files.length;
       return pages;
     }),
   );
 
-// ---------------------------------------------------------------------------
-// Main input handler
-// ---------------------------------------------------------------------------
-
-// Accept both PDF and plain-text files
-PDF_INPUT.setAttribute("accept", ".pdf,.txt,application/pdf,text/plain");
+PDF_INPUT.setAttribute(
+  "accept",
+  ".pdf,.txt,.srt,application/pdf,text/plain,application/x-subrip,text/x-srt",
+);
 
 PDF_INPUT.addEventListener("input", async () => {
   Array.from(document.getElementsByClassName("hide-on-start")).forEach(
@@ -254,7 +361,7 @@ PDF_INPUT.addEventListener("input", async () => {
     currentBlobUrl = null;
   }
   viewerFrame.src = "about:blank";
-  viewerFrame.style.display = "block";
+  CANVAS_VIEWER.style.display = "block";
   TEXT_VIEWER.style.display = "none";
   TEXT_VIEWER.textContent = "";
   INPUT_LIST.innerHTML = "";
@@ -270,6 +377,7 @@ PDF_INPUT.addEventListener("input", async () => {
       pageNumber: null,
       documentTitle: null,
       documentId: null,
+      startTime: null,
     };
 
     for (const page of pages) {
@@ -284,6 +392,7 @@ PDF_INPUT.addEventListener("input", async () => {
             documentTitle: page.documentTitle,
             pageNumber: page.pageNumber,
             content: sentence,
+            startTime: page.startTime ?? null,
           };
         } else {
           current.content += sentence;
@@ -291,6 +400,7 @@ PDF_INPUT.addEventListener("input", async () => {
             current.pageNumber = page.pageNumber;
             current.documentTitle = page.documentTitle;
             current.documentId = page.documentId;
+            current.startTime = page.startTime ?? null;
           }
         }
       }
@@ -427,6 +537,7 @@ PDF_INPUT.addEventListener("input", async () => {
         documentTitle: chunk.documentTitle,
         pageNumber: chunk.pageNumber,
         content: chunk.content,
+        startTime: chunk.startTime ?? null,
         distance,
       };
     });
@@ -450,10 +561,17 @@ PDF_INPUT.addEventListener("input", async () => {
 
       const pageSpan = document.createElement("span");
       pageSpan.classList.add("light-text");
-      // For txt files show "§N" instead of "p.N" to indicate it's a text section
+
       const meta = documentMeta.get(chunk.documentId);
-      pageSpan.textContent =
-        meta?.type === "txt" ? "§" + chunk.pageNumber : "p." + chunk.pageNumber;
+      if (meta?.type === "srt") {
+        pageSpan.textContent = chunk.startTime
+          ? formatTimestamp(chunk.startTime)
+          : "§" + chunk.pageNumber;
+      } else if (meta?.type === "txt") {
+        pageSpan.textContent = "§" + chunk.pageNumber;
+      } else {
+        pageSpan.textContent = "p." + chunk.pageNumber;
+      }
 
       const contentDiv = document.createElement("div");
       contentDiv.textContent = chunk.content;

@@ -8,8 +8,8 @@ iframe {
   border: 0;
 }
 
-mark {
-  background: #ffe066;
+mark * {
+  background: rgb(100, 236, 100);
   border-radius: 2px;
 }
 
@@ -138,6 +138,10 @@ progress {
   margin: 1rem;
 }
 
+#plain-text-viewer * {
+  scroll-margin-top: 5rem;
+}
+
 li[data-active] {
   background-color: lightgrey;
 }
@@ -156,4 +160,11 @@ li[data-active] {
 
 .output-info {
   padding-bottom: 0.25rem;
+}
+
+.srt-timestamp {
+  font-size: 0.75em;
+  opacity: 0.5;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.25em;
 }

@@ -10,8 +10,8 @@
     <div class="main-tabs">
       <div class="input">
         <p class="hide-on-start">
-         This tool implements semantic search across multiple files (PDF and
-         TXT). Although it runs in the browser, it operates locally. Therefore,
+         This tool implements semantic search across multiple files (PDF,
+         TXT and SRT). Although it runs in the browser, it operates locally. Therefore,
          your files (and any resulting data) are not uploaded.
         </p>
         <p class="hide-on-start">
@@ -23,7 +23,9 @@
         <p class="hide-on-start"></p>
         <p class="hide-on-start">Please select some files to get started:</p>
 
-        <input id="file-input" type="file" multiple accept=".pdf,.txt" class="hide-on-start" />
+        <input id="file-input" type="file" multiple
+          accept=".pdf,.txt,.srt,application/pdf,text/plain,application/x-subrip,text/x-srt"
+          class="hide-on-start" />
         <progress id="progress-bar" value="0" max="1"></progress>
         <ul id="input-list"></ul>
       </div>
