@@ -1,7 +1,6 @@
 import * as pdfjsLib from "./lib/pdfjs/build/pdf.mjs";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./lib/pdfjs/build/pdf.worker.mjs";
-
-const EPSILON = 0.0001;
+const VIEWER_URL = "./lib/pdfjs/web/viewer.html";
 
 const PDF_INPUT = document.getElementById("file-input");
 const PROGRESS_BAR = document.getElementById("progress-bar");
@@ -12,20 +11,17 @@ const OUTPUT_LIST = document.getElementById("output-list");
 const CANVAS_VIEWER = document.getElementById("canvas-viewer");
 const TEXT_VIEWER = document.getElementById("plain-text-viewer");
 
-const CHUNK_SIZE = 800;
-
-const pdfBuffers = new Map();
-
-let currentBlobUrl = null;
-
 const viewerFrame = document.createElement("iframe");
 CANVAS_VIEWER.style.padding = "0";
 CANVAS_VIEWER.append(viewerFrame);
 
-const VIEWER_URL = "./lib/pdfjs/web/viewer.html";
+const EPSILON = 0.0001;
+const CHUNK_SIZE = 800;
 
+let currentBlobUrl = null;
 let currentDocumentId = null;
 const documentMeta = new Map();
+const pdfBuffers = new Map();
 
 function waitForViewer(win) {
   return new Promise((resolve) => {
@@ -214,7 +210,7 @@ async function renderPage(documentId, pageNumber, chunkText) {
 
     await new Promise((resolve) => {
       viewerFrame.onload = resolve;
-      viewerFrame.src = VIEWER_URL + "?file=";
+      viewerFrame.src = VIEWER_URL + "?file=&sidebarView=0";
     });
 
     const app = await waitForViewer(viewerFrame.contentWindow);
@@ -224,6 +220,7 @@ async function renderPage(documentId, pageNumber, chunkText) {
     app.eventBus.on(
       "pagesloaded",
       () => {
+        app.pdfSidebar?.close();
         app.pdfViewer.scrollPageIntoView({ pageNumber });
         highlightChunk(app);
       },
