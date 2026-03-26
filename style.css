@@ -76,9 +76,10 @@ mark * {
 }
 
 #query-submit {
-  width: 20%;
+  width: 10%;
+  min-width: 2.5rem;
   border-radius: 0 1rem 1rem 0;
-  font-weight: bold;
+  font-size: 1rem;
 }
 
 .viewer {
