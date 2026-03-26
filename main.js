@@ -23,39 +23,6 @@ let currentDocumentId = null;
 const documentMeta = new Map();
 const pdfBuffers = new Map();
 
-function waitForViewer(win) {
-  return new Promise((resolve) => {
-    const tryResolve = () => {
-      const app = win.PDFViewerApplication;
-      if (!app) return false;
-      if (app.initialized) {
-        resolve(app);
-        return true;
-      }
-      if (app.initializedPromise) {
-        app.initializedPromise.then(() => resolve(app));
-        return true;
-      }
-      return false;
-    };
-
-    if (!tryResolve()) {
-      viewerFrame.addEventListener(
-        "load",
-        () => {
-          const app = win.PDFViewerApplication;
-          if (app?.initializedPromise) {
-            app.initializedPromise.then(() => resolve(app));
-          } else {
-            resolve(app);
-          }
-        },
-        { once: true },
-      );
-    }
-  });
-}
-
 function parseSrt(rawText) {
   const entries = [];
 
@@ -209,12 +176,10 @@ async function renderPage(documentId, pageNumber, chunkText) {
     currentBlobUrl = URL.createObjectURL(blob);
 
     await new Promise((resolve) => {
-      viewerFrame.onload = resolve;
+      viewerFrame.addEventListener("load", resolve);
       viewerFrame.src = VIEWER_URL + "?file=&sidebarView=0";
     });
-
-    const app = await waitForViewer(viewerFrame.contentWindow);
-
+    const app = await viewerFrame.contentWindow.PDFViewerApplication;
     await app.open({ url: currentBlobUrl });
 
     app.eventBus.on(
