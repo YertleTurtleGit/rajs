@@ -1,6 +1,7 @@
 # RAJS
 _Retrival Augmentation in JavaScript_
 
+**Ask a question to get relevant references from your documents:**
 [https://yertleturtlegit.github.io/rajs/](https://yertleturtlegit.github.io/rajs/)
 
 Semantic search for documents (PDF, TXT) and transcription files (SRT) inside
