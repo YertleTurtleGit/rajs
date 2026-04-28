@@ -1,4 +1,4 @@
-# RAJS
+# 🔎📄 RAJS
 _Retrival Augmentation in JavaScript_
 
 **Ask a question to get relevant references from your documents:**
