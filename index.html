@@ -1,36 +1,57 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>📄 RAJS</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔎</text></svg>"
+    />
     <link rel="stylesheet" href="style.css" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔎</text></svg>">
   </head>
   <body>
     <div class="main-tabs">
       <div class="input">
         <p class="hide-on-start">
-         <b>Ask a question to get relevant references from your documents.</b>
+          <b>Ask a question to get relevant references from your documents.</b>
         </p>
         <p class="hide-on-start">
-         Semantic search for documents (PDF, TXT) and transcription files (SRT)
-         inside your browser using pre-trained transformers. This tool runs
-         locally and does not upload your files to any server.
+          Semantic search for documents (PDF, TXT) and transcription files (SRT)
+          inside your browser using pre-trained transformers. This tool runs
+          locally and does not upload your files to any server.
         </p>
         <p class="hide-on-start">
-          The source code of this tool is available here:</br>
-          <a href="https://github.com/YertleTurtleGit/rajs"
-             target="_blank" rel="noopener noreferrer"
-            >https://github.com/&shy;YertleTurtleGit/rajs</a
-          >
+          The source code of this tool is available here:<br />
+          <a
+            href="https://codeberg.org/endmer/rajs"
+            target="_blank"
+            rel="noopener noreferrer"
+            >codeberg.org/&shy;endmer/rajs
+          </a>
         </p>
         <p class="hide-on-start"></p>
+
+        <p class="hide-on-start">
+          You may also be interested to visualize your text and documents' relation in an
+          interactive three-dimensional graph:<br />
+          <a
+            href="https://endmer.codeberg.page/text-graph"
+            target="_blank"
+            rel="noopener noreferrer"
+            >endmer.codeberg.page/&shy;text-graph
+          </a>
+        </p>
+        <p class="hide-on-start"></p>
+
         <p class="hide-on-start">Please select some files to get started:</p>
 
-        <input id="file-input" type="file" multiple
+        <input
+          id="file-input"
+          type="file"
+          multiple
           accept=".pdf,.txt,.srt,application/pdf,text/plain,application/x-subrip,text/x-srt"
-          class="hide-on-start" />
+        />
         <progress id="progress-bar" value="0" max="1"></progress>
         <ul id="input-list"></ul>
       </div>
@@ -38,7 +59,7 @@
       <div class="query">
         <form>
           <input type="text" id="query-text" name="query" />
-          <input id="query-submit" type="submit" value="&#x1F50D;" disabled />
+          <input id="query-submit" type="submit" value="&#x1F50D;" />
         </form>
         <ul id="output-list"></ul>
       </div>
